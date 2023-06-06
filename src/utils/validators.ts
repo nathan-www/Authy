@@ -88,7 +88,6 @@ export interface ClientInfoType {
 }
 
 export function ClientInfoValidator(clientInfo: ClientInfoType) {
-  // TODO: Add regex to stop bad special characters
   return JSONSchemaValidatorInst.validate(clientInfo, {
     properties: {
       cookies: {
