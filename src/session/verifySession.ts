@@ -13,13 +13,14 @@ import {
 import { Session, SessionUse } from "../db";
 import sessionSusbot from "../susbot/sessionSusbot";
 import md5 from "md5";
+import { Op } from "sequelize";
 
 export default async function verifySession(clientInfo: ClientInfoType) {
   // Sanitise clientInfo
   if (!ClientInfoValidator(clientInfo)) {
     return {
       error: ERROR_SESSION_INVALID_CLIENTINFO,
-      verified: false,
+      success: false,
     };
   }
 
@@ -29,7 +30,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     // Session token not set
     return {
       error: ERROR_SESSION_MISSING_TOKEN,
-      verified: false,
+      success: false,
     };
   }
 
@@ -43,7 +44,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     // Session token invalid
     return {
       error: ERROR_SESSION_INVALID_TOKEN,
-      verified: false,
+      success: false,
     };
   }
 
@@ -55,7 +56,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TOKEN_BINDING_FAILED,
-      verified: false,
+      success: false,
     };
   }
 
@@ -67,7 +68,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TOKEN_BINDING_FAILED,
-      verified: false,
+      success: false,
     };
   }
 
@@ -79,7 +80,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TOKEN_BINDING_FAILED,
-      verified: false,
+      success: false,
     };
   }
 
@@ -91,7 +92,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TOKEN_BINDING_FAILED,
-      verified: false,
+      success: false,
     };
   }
 
@@ -107,7 +108,7 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TIMEOUT,
-      verified: false,
+      success: false,
     };
   }
 
@@ -119,25 +120,27 @@ export default async function verifySession(clientInfo: ClientInfoType) {
     await destroySession(session);
     return {
       error: ERROR_SESSION_TIMEOUT,
-      verified: false,
+      success: false,
     };
   }
 
-  const susbotResults = await sessionSusbot(session);
+  // Record sessionUse and purge old sessionUse records
+  await recordSessionUse(session, clientInfo);
+  await purgeOldSessionUses(session);
 
+  const susbotResults = await sessionSusbot(session);
   if (!susbotResults.pass) {
     // Session susbot failed - possible session hijacking
     await destroySession(session);
     return {
       error: ERROR_SESSION_SUSBOT_FAILED,
-      verified: false,
+      success: false,
     };
   }
 
   // All good
-  await recordSessionUse(session, clientInfo);
   return {
-    verified: true,
+    success: true,
     accountId: session.AccountId,
   };
 }
@@ -153,7 +156,7 @@ async function recordSessionUse(session: Session, clientInfo: ClientInfoType) {
     lastSessionUse.ClientUserAgentHash !== userAgentHash
   ) {
     // Create new sessionUse entry
-    SessionUse.create({
+    await SessionUse.create({
       SessionId: session.SessionId,
       ClientCountry: clientInfo.country,
       ClientFingerprint: clientInfo.fingerprint,
@@ -164,7 +167,7 @@ async function recordSessionUse(session: Session, clientInfo: ClientInfoType) {
     });
   } else {
     // Extend original sessionUse entry
-    lastSessionUse.update({
+    await lastSessionUse.update({
       EndTimestamp: Date.now(),
     });
   }
@@ -172,7 +175,24 @@ async function recordSessionUse(session: Session, clientInfo: ClientInfoType) {
 
 async function getLastSessionUse(session: Session) {
   return await SessionUse.findOne({
+    where: {
+      SessionId: session.SessionId,
+    },
     order: [["EndTimestamp", "DESC"]],
+  });
+}
+
+// Delete SessionUse records beyond the retain period
+async function purgeOldSessionUses(session: Session) {
+  return await SessionUse.destroy({
+    where: {
+      SessionId: session.SessionId,
+      EndTimestamp: {
+        [Op.lt]:
+          Date.now() -
+          SECURITY_CONFIG_SESSIONS.sessionUseRetentionTimeMinutes * 60000,
+      },
+    },
   });
 }
 

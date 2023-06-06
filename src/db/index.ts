@@ -73,6 +73,68 @@ export class RateLimitingEvent extends Model<
   declare EventType: string;
 }
 
+export class Password extends Model<
+  InferAttributes<Password>,
+  InferCreationAttributes<Password>
+> {
+  declare PasswordHash: string;
+  declare LastSetTimestamp: number;
+  declare NumChanges: number;
+  declare AccountId: ForeignKey<Account["AccountId"]>;
+}
+
+export class MFARequest extends Model<
+  InferAttributes<MFARequest>,
+  InferCreationAttributes<MFARequest>
+> {
+  declare MFARequestId: number;
+  declare IdentityId: ForeignKey<Identity["IdentityId"]>;
+  declare RequestTimestamp: number;
+  declare RequestReferenceToken: string;
+  declare RequestAuthenticationToken: string;
+}
+
+MFARequest.init(
+  {
+    MFARequestId: {
+      allowNull: false,
+      primaryKey: true,
+      type: DataTypes.BIGINT,
+    },
+    RequestTimestamp: {
+      allowNull: false,
+      type: DataTypes.BIGINT,
+    },
+    RequestReferenceToken: {
+      allowNull: false,
+      type: DataTypes.TEXT("medium"),
+    },
+    RequestAuthenticationToken: {
+      allowNull: false,
+      type: DataTypes.TEXT("medium"),
+    },
+  },
+  { sequelize }
+);
+
+Password.init(
+  {
+    PasswordHash: {
+      allowNull: false,
+      type: DataTypes.STRING,
+    },
+    LastSetTimestamp: {
+      allowNull: false,
+      type: DataTypes.BIGINT,
+    },
+    NumChanges: {
+      allowNull: false,
+      type: DataTypes.BIGINT,
+    },
+  },
+  { sequelize }
+);
+
 Account.init(
   {
     AccountId: {
@@ -199,12 +261,29 @@ RateLimitingEvent.init(
   { sequelize }
 );
 
+Account.hasOne(Password, {
+  foreignKey: "AccountId",
+  onDelete: "CASCADE",
+});
+Password.belongsTo(Account, {
+  foreignKey: "AccountId",
+});
+
 Account.hasMany(Identity, {
   foreignKey: "AccountId",
   onDelete: "CASCADE",
 });
 Identity.belongsTo(Account, {
   foreignKey: "AccountId",
+});
+
+Identity.hasMany(MFARequest, {
+  foreignKey: "IdentityId",
+  onDelete: "CASCADE",
+});
+
+MFARequest.belongsTo(Identity, {
+  foreignKey: "IdentityId",
 });
 
 Account.hasMany(Session, {

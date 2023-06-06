@@ -3,11 +3,14 @@ import express from "express";
 import verifySession from "./session/verifySession";
 import cookieParser from "cookie-parser";
 import { Account } from "./db";
+import register from "./authentication/register";
+import login from "./authentication/login";
 
 const app = express();
 const port = 3000;
 
 app.use(cookieParser());
+app.use(express.json());
 
 app.post("/", async (req, res) => {
   const clientInfo = {
@@ -20,6 +23,38 @@ app.post("/", async (req, res) => {
   };
 
   const info = await verifySession(clientInfo);
+
+  res.contentType("application/json");
+  res.send(JSON.stringify(info));
+});
+
+app.post("/register", async (req, res) => {
+  const clientInfo = {
+    cookies: req.cookies,
+    country: "GB",
+    fingerprint: "a71d233137a35b3967269e871899805c",
+    ip: "109.202.242.254",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0",
+  };
+
+  const info = await register(clientInfo, req.body);
+
+  res.contentType("application/json");
+  res.send(JSON.stringify(info));
+});
+
+app.post("/login", async (req, res) => {
+  const clientInfo = {
+    cookies: req.cookies,
+    country: "GB",
+    fingerprint: "a71d233137a35b3967269e871899805c",
+    ip: "109.202.242.254",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/110.0",
+  };
+
+  const info = await login(clientInfo, req.body);
 
   res.contentType("application/json");
   res.send(JSON.stringify(info));
